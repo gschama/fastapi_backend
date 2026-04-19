@@ -36,7 +36,7 @@ class User(Base):
     username = Column(String(100), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     # FK unica a persons (nullable=True para permitir registro sin perfil inicial)
-    person_id = Column(BigInteger, ForeignKey("person.id"), unique=True, nullable=True)
+    person_id = Column(BigInteger, ForeignKey("persons.id"), unique=True, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
