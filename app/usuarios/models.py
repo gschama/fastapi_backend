@@ -47,8 +47,8 @@ class User(Base):
     person = relationship("Person", back_populates="user", uselist=False)
     user_pins = relationship("UserPin", back_populates="user", uselist=False, cascade="all, delete-orphan")
     password_history = relationship("PasswordHistory", back_populates="user", cascade="all, delete-orphan")
-    pin_history = relationship("PinHistory", back_populates="user", cascade="all, delete-orphan")
-    roles = relationship("UserRole", back_populates="user", cascade="all, delete-orphan")
+    pin_history = relationship("PinHistory", foreign_keys="PinHistory.user_id", back_populates="user", cascade="all, delete-orphan")
+    roles = relationship("UserRole", foreign_keys="UserRole.user_id", back_populates="user", cascade="all, delete-orphan")
     assigned_roles = relationship("UserRole", foreign_keys="UserRole.assigned_by", back_populates="assigner")
 
     def __repr__(self):
