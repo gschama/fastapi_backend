@@ -1,122 +1,157 @@
-from sqlalchemy import(
-    Column, Integer, String, Boolean, DateTime, ForeignKey, Text, UniqueConstraint, Index, Table
+from sqlalchemy import (
+    Column, BigInteger, String, Boolean, DateTime, ForeignKey, Text, func
 )
-from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy.orm import relationship
 from app.core.database import Base
 
-class User(Base):
-    """
-    Tabla de Autenticacion.
-    Datos minimos para login y seguridad.
-    """
-    __tablename__="users" # Nombre de la tabla en la base de datos
-    id = Column(Integer, primary_key=True, index=True) #Clave primario (ID unico para cada usuario)
-    email = Column(String(255), unique=True, index=True, nullable=False) # email (unico, no puede repetirse)
-    username = Column(String(100), unique=True, index=True, nullable=False) #nombre de usuario (unico)
-    password_hash = Column(String(255), nullable=False) #Contrasena (hash encriptado, NUNCA texto plano)
-    is_active = Column(Boolean, default=True, nullable=False) # El usuario esta activo?
-    is_admin = Column(Boolean, default=False, nullable=False) #El usuario es administrador?
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False) #Fecha de creacion (automatica)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True) #Fecha de actualizacion (automatica)
-    #RELACIONES
-    profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    documents = relationship("UserDocument", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    pin = relationship("UserPin", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    password_history = relationship("PasswordHistory", back_populates="user", cascade="all, delete-orphan")
-    pin_history = relationship("PinHistory", back_populates="user", cascade="all, delete-orphan")
+# 1. Tabla: persons (Datos del Mundo Real)
+class Person(Base):
+    __tablename__ = "persons"
 
-    #REPRESENTACION DEL OBJETO
-    def __repr__(self):
-        return f"<User(id={self.id}, username={self.username})>"
-    
-class UserProfile(Base):
-    """
-    Tabla de Perfil Personal.
-    Informacion personal del usuario con flesibilidad para diferentes culturas.
-    """
-    __tablename__ = "user_profiles"
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    id = Column(BigInteger, primary_key=True, index=True)
     first_name = Column(String(100), nullable=False)
     second_name = Column(String(100), nullable=True)
     other_name = Column(String(100), nullable=True)
     paternal_surname = Column(String(100), nullable=False)
     maternal_surname = Column(String(100), nullable=True)
     married_surname = Column(String(100), nullable=True)
-    phone = Column(String(20), nullable=False)
-    addres = Column(String(500), nullable=False)
+    phone = Column(String(20), nullable=True)
+    address = Column(String(500), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
-    #RELACION INVERSA
-    user = relationship("User", back_populates="profile")
+
+    #Relaciones 1:1
+    user = relationship("User", back_populates="person", uselist=False)
+    documents = relationship("PersonDocument", back_populates="person", uselist=False, cascade="all, delete-orphan")
 
     def __repr__(self):
-        return f"<UserProfile(user_id={self.user_id})>"
+        return f"<Person(id={self.id}, name={self.first_name} {self.paternal_surname})>"
     
-class UserDocument(Base):
-    """
-    Tabla de Documentos Legales.
-    Datos sensibles que requieren verificacion adicional.
-    """
-    __tablename__ = "user_documents"
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+# 2. Tabla: users (Datos del Sistema)
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(BigInteger, primary_key=True, index=True)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    username = Column(String(100), unique=True, index=True, nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    # FK unica a persons (nullable=True para permitir registro sin perfil inicial)
+    person_id = Column(BigInteger, ForeignKey("person.id"), unique=True, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    email_verified_at = Column(DateTime(timezone=True), nullable=True)
+    last_login_at = Column(DateTime(timezone=True), nullable=True)
+
+    #Relaciones
+    person = relationship("Person", back_populates="user", uselist=False)
+    user_pins = relationship("UserPin", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    password_history = relationship("PasswordHistory", back_populates="user", cascade="all, delete-orphan")
+    pin_history = relationship("PinHistory", back_populates="user", cascade="all, delete-orphan")
+    roles = relationship("UserRole", back_populates="user", cascade="all, delete-orphan")
+    assigned_roles = relationship("UserRole", foreign_keys="UserRole.assigned_by", back_populates="assigner")
+
+    def __repr__(self):
+        return f"<User(id={self.id}, username={self.username})>"
+    
+# 3. Tabla: person_documents (Reemplaza user_documents)
+class PersonDocument(Base):
+    __tablename__ = "person_documents"
+
+    id = Column(BigInteger, primary_key=True, index=True)
+    person_id = Column(BigInteger, ForeignKey("persons.id"), unique=True, nullable=False)
+    # Documentos legales (String para preservar ceros y formatos)
     dpi = Column(String(13), unique=True, nullable=True)
     nit = Column(String(12), unique=True, nullable=True)
     is_verified = Column(Boolean, default=False, nullable=False)
     verified_at = Column(DateTime(timezone=True), nullable=True)
-    verified_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    verified_by = Column(BigInteger, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    #RELACION INVERSA
-    user = relationship("User", back_populates="documents")
+
+    #Relaciones
+    person = relationship("Person", back_populates="documents", uselist=False)
+    verifier = relationship("User", foreign_keys=[verified_by])
+
     def __repr__(self):
-        return f"<UserDocumento(user_id={self.user_id})>"
+        return f"<PersonDocument(person_id={self.person_id})>"
     
+# 4. Tabla: roles
+class Role(Base):
+    __tablename__ = "roles"
+
+    id = Column(BigInteger, primary_key=True, index=True)
+    name = Column(String(100), unique=True, nullable=False)
+    description = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    # Relaciones
+    users = relationship("UserRole", back_populates="role")
+
+    def __repr__(self):
+        return f"<Role(id={self.id}, name={self.name})>"
+    
+# 5. Tabla: user_roles (Pivote Many-to-Many con atributos)
+class UserRole(Base):
+    __tablename__ = "user_roles"
+    
+    id = Column(BigInteger, primary_key=True, index=True)
+    user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
+    role_id = Column(BigInteger, ForeignKey("roles.id"), nullable=False)
+    assigned_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    assigned_by = Column(BigInteger, ForeignKey("users.id"), nullable=True)
+    # Relaciones explicitas para evitar ambiguedad con multiples FKs a users
+    user = relationship("User", foreign_keys=[user_id], back_populates="roles")
+    role = relationship("Role", back_populates="users")
+    assigner = relationship("User", foreign_keys=[assigned_by], back_populates="assigned_roles")
+
+    def __repr__(self):
+        return f"<UserRole(user_id={self.user_id}, role_id={self.role_id})>"
+    
+# 6. Tabla: user_pins (Actualizada)
 class UserPin(Base):
-    """
-    Tabla de PIN Actual del Usuario.
-    Para autenticacion de segundo factor o transacciones.
-    """
     __tablename__ = "user_pins"
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+
+    id = Column(BigInteger, primary_key=True, index=True)
+    user_id = Column(BigInteger, ForeignKey("users.id"), unique=True, nullable=False)
     pin_hash = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
-    must_change = Column(Boolean, default=False, nullable=False)
+    must_change = Column(Boolean, default=True, nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    update_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
-    #RELACION INVERSA
-    user = relationship("User", back_populates="pin")
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    # Relaciones
+    user = relationship("User", back_populates="user_pins", uselist=False)
 
     def __repr__(self):
         return f"<UserPin(user_id={self.user_id})>"
     
+# 7. Tabla: password_history (Actualizada)
 class PasswordHistory(Base):
-    """
-    Historial de contrasenas.
-    Para evitar reutilizacion de contrasenas antiguas.
-    """
     __tablename__ = "password_history"
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    id = Column(BigInteger, primary_key=True, index=True)
+    user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
     password_hash = Column(String(255), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=True)
+    # Relaciones
     user = relationship("User", back_populates="password_history")
-    
+
     def __repr__(self):
         return f"<PasswordHistory(user_id={self.user_id})>"
     
+# 8. Tabla: pin_history (Actualizada)
 class PinHistory(Base):
     __tablename__ = "pin_history"
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    id = Column(BigInteger, primary_key=True, index=True)
+    user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
     pin_hash = Column(String(255), nullable=False)
-    change_by = Column(Integer, ForeignKey("users.id"), nullable = True)
+    changed_by = Column(BigInteger, ForeignKey("users.id"), nullable=True)
     change_reason = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    user = relationship("User", back_populates="pin_history")
+    # Relaciones
+    user = relationship("User", foreign_keys=[user_id], back_populates="pin_history")
+    changer = relationship("User", foreign_keys=[changed_by])
+
     def __repr__(self):
         return f"<PinHistory(user_id={self.user_id})>"
